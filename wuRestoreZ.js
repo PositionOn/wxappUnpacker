@@ -11,13 +11,13 @@ function catchZGroup(code, groupPreStr, cb) {
 		let vm = new VM({sandbox: {z: z, debugInfo: []}});
 		vm.run(content);
 		if (content.startsWith(debugPre)) for (let i = 0; i < z.length; i++) z[i] = z[i][1];
-		zArr[preStr.match(/function gz\$gwx(\d*\_\d+)/)[1]] = z;
+		zArr[preStr.match(/function gz\$gwx([A-Za-z0-9_]+)/)[1]] = z;
 	}
 	cb({"mul": zArr});
 }
 
 function catchZ(code, cb) {
-	let groupTest = code.match(/function gz\$gwx(\d*\_\d+)\(\)\{\s*if\( __WXML_GLOBAL__\.ops_cached\.\$gwx\d*\_\d+\)/g);
+	let groupTest = code.match(/function gz\$gwx([A-Za-z0-9_]+)\(\)\{\s*if\( __WXML_GLOBAL__\.ops_cached\.\$gwx[A-Za-z0-9_]+\)/g);
 	if (groupTest !== null) return catchZGroup(code, groupTest, cb);
 	let z = [], vm = new VM({
 		sandbox: {

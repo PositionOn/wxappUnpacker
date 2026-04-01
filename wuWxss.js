@@ -252,6 +252,24 @@ function doWxss(dir, cb, mainDir, nowDir) {
                 ';\nnavigator=' + JSON.stringify(navigator) +
                 ';\nvar __mainPageFrameReady__ = window.__mainPageFrameReady__ || function(){};var __WXML_GLOBAL__={entrys:{},defines:{},modules:{},ops:[],wxs_nf_init:undefined,total_ops:0};var __vd_version_info__=__vd_version_info__||{}' +
                 ";\n" + scriptCode;
+            if (frameFile.endsWith("app-wxss.js")) {
+                let cssLines = code.split('\n');
+                let cssStart = cssLines.findIndex(line => line.includes('window.__rpxRecalculatingFuncs__'));
+                if (cssStart !== -1) {
+                    let cssCode = [];
+                    for (let i = cssStart; i < cssLines.length; i++) {
+                        if (cssLines[i].startsWith("if(typeof global==='undefined')")) break;
+                        cssCode.push(cssLines[i]);
+                    }
+                    if (cssCode.length > 0) {
+                        cssCode[cssCode.length - 1] = cssCode[cssCode.length - 1].replace(/\)\(\);;;\}var __pageFrameEndTime__[\s\S]*$/, ')();');
+                        mainCode = 'window= ' + JSON.stringify(Object.assign({}, window, {devicePixelRatio: 2, __rpxRecalculatingFuncs__: []})) +
+                            ';\nnavigator=' + JSON.stringify(navigator) +
+                            ';\ndocument={head:{appendChild:function(){}},createElement:function(){return {setAttribute:function(){},appendChild:function(){},childNodes:[],styleSheet:null}},createTextNode:function(v){return v}};var __mainPageFrameReady__ = function(){};var __COMMON_STYLESHEETS__={};var __vd_version_info__=__vd_version_info__||{}' +
+                            ";\n" + cssCode.join('\n');
+                    }
+                }
+            }
 
                 if (code.indexOf('__COMMON_STYLESHEETS__') != -1) {
                   let commonStyles = code.slice(

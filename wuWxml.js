@@ -375,28 +375,50 @@ function doWxs(code, name) {
     return wxsBeautify(code.slice(code.indexOf(before) + before.length, code.lastIndexOf('return nv_module.nv_exports;}')).replace(eval('/' + ('p_' + name).replace(/\//g, '\\/') + '/g'), '').replace(/nv\_/g, '').replace(/(require\(.*?\))\(\)/g,'$1'));
 }
 
+function extractFrameEntries(code) {
+    let rD = {}, rE = {}, rF = {}, requireInfo = {}, x;
+    let vm = new VM({
+        sandbox: {
+            d_: rD, e_: rE, f_: rF, _vmRev_(data) {
+                [x, requireInfo] = data;
+            }, nv_require(path) {
+                return () => path;
+            }
+        }
+    });
+    const before = "\nvar nv_require=function(){var nnm=";
+    const legacyStart = code.lastIndexOf(before);
+    const legacyEnd = code.lastIndexOf("if(path&&e_[path]){");
+    if (legacyStart !== -1 && legacyEnd !== -1 && legacyEnd > legacyStart) {
+        try {
+            let legacyCode = code.slice(legacyStart + before.length, legacyEnd);
+            let json = legacyCode.slice(0, legacyCode.indexOf("};") + 1);
+            let endOfRequire = legacyCode.indexOf("()\r\n") + 4;
+            if (endOfRequire == 4 - 1) endOfRequire = legacyCode.indexOf("()\n") + 3;
+            legacyCode = legacyCode.slice(endOfRequire);
+            vm.run(legacyCode + "\n_vmRev_([x," + json + "])");
+            return {rD, rE, rF, requireInfo, x};
+        } catch (e) {
+        }
+    }
+    // Newer app-wxss.js bundles contain multiple WXML chunks after the bootstrap wrapper.
+    let chunkRe = /var x=\['\.\//g, matched = false;
+    for (let chunk; (chunk = chunkRe.exec(code)) !== null;) {
+        let end = code.indexOf("if(path&&e_[path]){", chunk.index);
+        if (end === -1) continue;
+        matched = true;
+        vm.run(code.slice(chunk.index, end) + "\n_vmRev_([x,{}])");
+    }
+    if (!matched) throw Error("Unsupported page-frame/app-wxss structure.");
+    return {rD, rE, rF, requireInfo, x};
+}
+
 function doFrame(name, cb, order, mainDir) {
     let moreInfo = order.includes("m");
     wxsList = {};
     wu.get(name, code => {
         getZ(code, z => {
-            const before = "\nvar nv_require=function(){var nnm=";
-            code = code.slice(code.lastIndexOf(before) + before.length, code.lastIndexOf("if(path&&e_[path]){"));
-            json = code.slice(0, code.indexOf("};") + 1);
-            let endOfRequire = code.indexOf("()\r\n") + 4;
-            if (endOfRequire == 4 - 1) endOfRequire = code.indexOf("()\n") + 3;
-            code = code.slice(endOfRequire);
-            let rD = {}, rE = {}, rF = {}, requireInfo = {}, x, vm = new VM({
-                sandbox: {
-                    d_: rD, e_: rE, f_: rF, _vmRev_(data) {
-                        [x, requireInfo] = data;
-                    }, nv_require(path) {
-                        return () => path;
-                    }
-                }
-            });
-            let vmCode = code + "\n_vmRev_([x," + json + "])";
-            vm.run(vmCode);
+            let {rD, rE, rF, requireInfo, x} = extractFrameEntries(code);
             let dir = mainDir || path.dirname(name), pF = [];
             for (let info in rF) if (typeof rF[info] == "function") {
                 let name = path.resolve(dir, (info[0] == '/' ? '.' : '') + info), ref = rF[info]();
